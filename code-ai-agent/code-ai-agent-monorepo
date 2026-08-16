@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# if the hostname is neither "asus-proart" nor "fedora", exit the script
+if [ "$(hostname)" != "asus-proart" ] && [ "$(hostname)" != "fedora" ]; then
+    echo "This script can only be run on asus-proart or fedora."
+    exit 1
+fi
+
+export NX_TUI=false
+
+if [ "$(hostname)" == "asus-proart" ]; then
+    export PATH="/home/mihamina/Apps/node/bin:${PATH}"
+    export WORKDIR="/home/mihamina/Apps/code-ai-agent/code-ai-agent"
+fi
+
+if [ "$(hostname)" == "fedora" ]; then
+  export PATH="/usr/local/node/bin:${PATH}"
+  export WORKDIR="/srv/shared/code-ai-agent/code-ai-agent"
+fi
+
+cd ${WORKDIR}
+
+npm install
+npx nx reset
+npx nx run-many --target=build --projects=lib,googleai-agent,anthropic-agent,openai-agent
+npx nx run-many --target=serve --projects=googleai-agent,anthropic-agent,openai-agent

@@ -1,0 +1,10 @@
+import { createSQLiteStore } from '@code-ai-agent/lib';
+const store = createSQLiteStore('/tmp/anthropic_agent.db');
+export const connectToDatabase = store.connectToDatabase;
+export const getDb = store.getDb;
+export const run = store.run;
+export const get = store.get;
+export const all = store.all;
+export const initializeDatabase = store.initializeDatabase;
+export const resetDatabase = store.resetDatabase;
+export const removeDatabaseFile = store.removeDatabaseFile;
