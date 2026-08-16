@@ -22,32 +22,43 @@ setDbStore({
   removeDatabaseFile: db.removeDatabaseFile,
 });
 
-export type Step = {
-  type: 'user_input' | 'model_output';
-  content: Array<{ type: 'text'; text: string }>;
-};
+export interface Part {
+  text: string;
+}
+
+export interface Content {
+  role?: 'user' | 'model';
+  parts: Part[];
+}
 
 type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
 export interface GenerationConfig {
   temperature: number;
-  top_p: number;
-  thinking_level?: ThinkingLevel;
+  topP: number;
+  thinkingConfig?: {
+    thinkingLevel: ThinkingLevel;
+  };
 }
 
 export interface GoogleAIRequestBody {
-  model: string;
-  input: Step[];
-  generation_config: GenerationConfig;
-  system_instruction?: string;
+  contents: Content[];
+  generationConfig: GenerationConfig;
+  systemInstruction?: Content;
+}
+
+export interface Candidate {
+  content: Content;
+  finishReason?: string;
+  index?: number;
 }
 
 export interface GoogleAIResponse {
-  steps: Step[];
-  usage: {
-    total_tokens?: number;
-    total_input_tokens?: number;
-    total_output_tokens?: number;
+  candidates: Candidate[];
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    totalTokenCount?: number;
   };
 }
 
@@ -73,57 +84,61 @@ function normalizeGeminiFlashModel(model: string): { model: string; thinkingLeve
 async function buildRequestBody(instructions: string, model: string): Promise<GoogleAIRequestBody> {
   const conversationMessages = await buildConversationMessages();
 
-  const input: Step[] = conversationMessages.map((msg) => ({
-    type: msg.role === 'user' ? 'user_input' : 'model_output',
-    content: [{ type: 'text', text: msg.content }],
+  const contents: Content[] = conversationMessages.map((msg) => ({
+    role: msg.role === 'user' ? 'user' : 'model',
+    parts: [{ text: msg.content }],
   }));
 
   const normalizedModel = normalizeGeminiFlashModel(model);
 
   const requestBody: GoogleAIRequestBody = {
-    model: normalizedModel.model,
-    input,
-    generation_config: {
+    contents,
+    generationConfig: {
       temperature: 0.7,
-      top_p: 0.9,
-      ...(normalizedModel.thinkingLevel ? { thinking_level: normalizedModel.thinkingLevel } : {}),
+      topP: 0.9,
+      ...(normalizedModel.thinkingLevel ? { thinkingConfig: { thinkingLevel: normalizedModel.thinkingLevel } } : {}),
     },
   };
 
   const sanitizedInstructions = instructions.trim();
   if (sanitizedInstructions) {
-    requestBody.system_instruction = sanitizedInstructions;
+    requestBody.systemInstruction = { parts: [{ text: sanitizedInstructions }] };
   }
 
   return requestBody;
 }
 
-function postToGoogleAI(requestBody: GoogleAIRequestBody, apiKey: string): Promise<AxiosResponse<GoogleAIResponse>> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/interactions`;
+function postToGoogleAI(
+  requestBody: GoogleAIRequestBody,
+  apiKey: string,
+  model: string
+): Promise<AxiosResponse<GoogleAIResponse>> {
+  const normalizedModel = normalizeGeminiFlashModel(model).model;
+  const url = `https://aiplatform.googleapis.com/v1/publishers/google/models/${normalizedModel}:generateContent?key=${encodeURIComponent(
+    apiKey
+  )}`;
+
   return axios.post<GoogleAIResponse>(url, requestBody, {
     headers: {
       'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey,
-      'Api-Revision': '2026-05-20',
     },
   });
 }
 
 function createErrorResponse(errorMessage: string): GoogleAIResponse {
   return {
-    steps: [
+    candidates: [
       {
-        type: 'model_output',
-        content: [
-          {
-            type: 'text',
-            text: errorMessage,
-          },
-        ],
+        content: {
+          role: 'model',
+          parts: [{ text: errorMessage }],
+        },
       },
     ],
-    usage: {
-      total_tokens: 0,
+    usageMetadata: {
+      promptTokenCount: 0,
+      candidatesTokenCount: 0,
+      totalTokenCount: 0,
     },
   };
 }
