@@ -2,7 +2,7 @@
 
 |           |                               :warning:                                                                         |           |
 | :---: | :---: | :---: |
-| :warning: | This software has been designed to be an agent of [code-ai.nvim](https://github.com/rakotomandimby/code-ai.nvim) | :warning: |
+| :warning: | This software has been designed to be an agent of [code-ai.nvim](https://github.com/code-ai-nvim/code-ai.nvim) | :warning: |
 
 
 
