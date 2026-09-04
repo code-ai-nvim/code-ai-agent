@@ -63,7 +63,7 @@ export interface GoogleAIResponse {
 }
 
 function normalizeGeminiFlashModel(model: string): { model: string; thinkingLevel?: ThinkingLevel } {
-  const match = model.match(/^gemini-(3\.[567])-flash(?:-(minimal|low|medium|high))?$/);
+  const match = model.match(/^gemini-(3\.[56789])-flash(?:-(minimal|low|medium|high))?$/);
   if (!match) {
     return { model };
   }
