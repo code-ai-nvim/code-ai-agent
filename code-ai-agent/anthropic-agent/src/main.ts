@@ -87,7 +87,7 @@ async function buildRequestBody(instructions: string, model: string): Promise<An
   const normalized = normalizeClaudeSonnet5Model(model);
 
   const requestBody: AnthropicRequestBody = {
-    max_tokens: 64000,
+    max_tokens: 128000,
     system: sanitizedInstructions || undefined,
     messages,
   };
