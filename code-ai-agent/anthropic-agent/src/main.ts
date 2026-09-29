@@ -54,37 +54,45 @@ export interface AnthropicResponse {
   };
 }
 
-type ClaudeSonnet5Effort = 'low' | 'xhigh';
+type AnthropicEffort = 'low' | 'xhigh';
 
-interface ClaudeSonnet5Config {
+interface AnthropicModelConfig {
   model: string;
   thinking?: { type: 'disabled' };
-  effort?: ClaudeSonnet5Effort;
+  effort?: AnthropicEffort;
 }
 
-function normalizeClaudeSonnet5Model(model: string): ClaudeSonnet5Config {
-  const match = model.match(/^claude-sonnet-5(?:-(.+))?$/);
+// Generic suffix-based model normalization.
+// Any model name of the form "<base>-<suffix>" is split on its last `-`
+// separator: the part before is used as the actual model id sent to the API,
+// and the suffix drives the thinking/effort configuration:
+//   - "medium" -> effort "low"
+//   - "high"   -> effort "xhigh"
+//   - anything else (or no suffix at all) -> thinking disabled
+// Model existence itself is not validated here; that responsibility is
+// delegated to the upstream Anthropic API.
+function normalizeAnthropicModel(model: string): AnthropicModelConfig {
+  const match = model.match(/^(.*)-(.+)$/);
   if (!match) {
     return { model };
   }
 
-  const [, suffix] = match;
+  const [, baseModel, suffix] = match;
 
   switch (suffix) {
     case 'medium':
-      return { model: 'claude-sonnet-5', effort: 'low' };
+      return { model: baseModel, effort: 'low' };
     case 'high':
-      return { model: 'claude-sonnet-5', effort: 'xhigh' };
-    case 'low':
+      return { model: baseModel, effort: 'xhigh' };
     default:
-      return { model: 'claude-sonnet-5', thinking: { type: 'disabled' } };
+      return { model: baseModel, thinking: { type: 'disabled' } };
   }
 }
 
 async function buildRequestBody(instructions: string, model: string): Promise<AnthropicRequestBody> {
   const messages = await buildConversationMessages();
   const sanitizedInstructions = instructions.trim();
-  const normalized = normalizeClaudeSonnet5Model(model);
+  const normalized = normalizeAnthropicModel(model);
 
   const requestBody: AnthropicRequestBody = {
     max_tokens: 128000,
@@ -122,7 +130,7 @@ function postToAnthropic(
         'anthropic-version': '2023-06-01',
       };
 
-  const normalized = normalizeClaudeSonnet5Model(model);
+  const normalized = normalizeAnthropicModel(model);
   const body = { ...requestBody, model: normalized.model };
 
   return axios.post<AnthropicResponse>(url, body, { headers });
