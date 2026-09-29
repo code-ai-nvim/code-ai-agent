@@ -62,23 +62,42 @@ export interface GoogleAIResponse {
   };
 }
 
-function normalizeGeminiFlashModel(model: string): { model: string; thinkingLevel?: ThinkingLevel } {
-  const match = model.match(/^gemini-(3\.[56789])-flash(?:-(minimal|low|medium|high))?$/);
+export interface GoogleAIModelConfig {
+  model: string;
+  thinkingLevel?: ThinkingLevel;
+}
+
+// Generic suffix-based model normalization for Google AI.
+// Any model name of the form "<base>-<suffix>" is split on its last `-` separator:
+// the part before is used as the actual model id sent to the API, and the suffix
+// drives the thinking configuration:
+//   - "high"   -> thinkingLevel "high"
+//   - "medium" -> thinkingLevel "medium"
+//   - "low"    -> thinkingLevel "low"
+//   - any other suffix -> least thinking available ("low" for Gemini 3.7, "minimal" otherwise)
+// If no suffix separator exists, the model is passed through as-is without thinkingConfig.
+// Model existence itself is not validated here; that responsibility is delegated to the upstream API.
+function normalizeGoogleAIModel(model: string): GoogleAIModelConfig {
+  const match = model.match(/^(.*)-(.+)$/);
   if (!match) {
     return { model };
   }
 
-  const [, version, level] = match;
-  let thinkingLevel: ThinkingLevel = (level as ThinkingLevel | undefined) ?? 'low';
+  const [, baseModel, suffix] = match;
 
-  if (version === '3.7' && thinkingLevel === 'minimal') {
-    thinkingLevel = 'low';
+  switch (suffix) {
+    case 'high':
+      return { model: baseModel, thinkingLevel: 'high' };
+    case 'medium':
+      return { model: baseModel, thinkingLevel: 'medium' };
+    case 'low':
+      return { model: baseModel, thinkingLevel: 'low' };
+    default: {
+      const isGemini37 = baseModel.includes('3.7');
+      const thinkingLevel: ThinkingLevel = isGemini37 ? 'low' : 'minimal';
+      return { model: baseModel, thinkingLevel };
+    }
   }
-
-  return {
-    model: `gemini-${version}-flash`,
-    thinkingLevel,
-  };
 }
 
 async function buildRequestBody(instructions: string, model: string): Promise<GoogleAIRequestBody> {
@@ -89,7 +108,7 @@ async function buildRequestBody(instructions: string, model: string): Promise<Go
     parts: [{ text: msg.content }],
   }));
 
-  const normalizedModel = normalizeGeminiFlashModel(model);
+  const normalizedModel = normalizeGoogleAIModel(model);
 
   const requestBody: GoogleAIRequestBody = {
     contents,
@@ -113,7 +132,7 @@ function postToGoogleAI(
   apiKey: string,
   model: string
 ): Promise<AxiosResponse<GoogleAIResponse>> {
-  const normalizedModel = normalizeGeminiFlashModel(model).model;
+  const normalizedModel = normalizeGoogleAIModel(model).model;
   const url = `https://aiplatform.googleapis.com/v1/publishers/google/models/${normalizedModel}:generateContent?key=${encodeURIComponent(
     apiKey
   )}`;
