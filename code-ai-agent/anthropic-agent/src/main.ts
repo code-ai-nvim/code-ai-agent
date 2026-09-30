@@ -35,7 +35,7 @@ export interface AnthropicRequestBody {
   messages: ConversationStep[];
   model?: string;
   thinking?: {
-    type: 'disabled';
+    type: 'between_tools';
   };
   output_config?: {
     effort: 'low' | 'xhigh';
@@ -58,7 +58,7 @@ type AnthropicEffort = 'low' | 'xhigh';
 
 interface AnthropicModelConfig {
   model: string;
-  thinking?: { type: 'disabled' };
+  thinking?: { type: 'between_tools' };
   effort?: AnthropicEffort;
 }
 
@@ -68,7 +68,7 @@ interface AnthropicModelConfig {
 // and the suffix drives the thinking/effort configuration:
 //   - "medium" -> effort "low"
 //   - "high"   -> effort "xhigh"
-//   - anything else (or no suffix at all) -> thinking disabled
+//   - anything else (or no suffix at all) -> thinking disabled via between-tool blocks
 // Model existence itself is not validated here; that responsibility is
 // delegated to the upstream Anthropic API.
 function normalizeAnthropicModel(model: string): AnthropicModelConfig {
@@ -85,7 +85,7 @@ function normalizeAnthropicModel(model: string): AnthropicModelConfig {
     case 'high':
       return { model: baseModel, effort: 'xhigh' };
     default:
-      return { model: baseModel, thinking: { type: 'disabled' } };
+      return { model: baseModel, thinking: { type: 'between_tools' } };
   }
 }
 
@@ -193,4 +193,3 @@ const handlePrompt = createPromptHandler(processPrompt, 'Anthropic');
 const app = createApp(handlePrompt, 'Anthropic');
 
 startServer(app, port, db.removeDatabaseFile);
-
