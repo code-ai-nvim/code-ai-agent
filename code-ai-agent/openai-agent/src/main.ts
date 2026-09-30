@@ -32,6 +32,9 @@ export interface OpenAIRequestBody {
   input: OpenAIInputMessage[];
   max_output_tokens: number;
   instructions?: string;
+  reasoning?: {
+    effort: OpenAIReasoningEffort;
+  };
 }
 
 export interface OpenAIOutputItem {
@@ -54,16 +57,64 @@ export interface OpenAIResponse {
   };
 }
 
-async function buildRequestBody(): Promise<OpenAIRequestBody> {
-  const conversationMessages = await buildConversationMessages();
+type OpenAIReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
-  return {
+export interface OpenAIModelConfig {
+  model: string;
+  reasoningEffort?: OpenAIReasoningEffort;
+}
+
+// Normalize an OpenAI model name that may carry a trailing reasoning-effort suffix.
+// Examples:
+//   "gpt-6-astra-max" -> { model: "gpt-6-astra", reasoningEffort: "max" }
+//   "gpt-5-high"      -> { model: "gpt-5", reasoningEffort: "high" }
+//   "gpt-5-medium"    -> { model: "gpt-5", reasoningEffort: "medium" }
+//   "gpt-5-low"       -> { model: "gpt-5", reasoningEffort: "low" }
+// Models without one of these explicit suffixes are passed through unchanged.
+function normalizeOpenAIModel(model: string): OpenAIModelConfig {
+  const match = model.match(/^(.*)-(none|minimal|low|medium|high|xhigh|max)$/);
+  if (!match) {
+    return { model };
+  }
+
+  const [, baseModel, suffix] = match;
+
+  switch (suffix) {
+    case 'none':
+    case 'minimal':
+    case 'low':
+    case 'medium':
+    case 'high':
+    case 'xhigh':
+    case 'max':
+      return { model: baseModel, reasoningEffort: suffix };
+    default:
+      return { model };
+  }
+}
+
+async function buildRequestBody(instructions: string, model: string): Promise<OpenAIRequestBody> {
+  const conversationMessages = await buildConversationMessages();
+  const normalized = normalizeOpenAIModel(model);
+  const sanitizedInstructions = instructions.trim();
+
+  const requestBody: OpenAIRequestBody = {
     input: conversationMessages.map(({ role, content }) => ({
       role,
       content,
     })),
     max_output_tokens: 1024 * 96,
   };
+
+  if (normalized.reasoningEffort) {
+    requestBody.reasoning = { effort: normalized.reasoningEffort };
+  }
+
+  if (sanitizedInstructions) {
+    requestBody.instructions = sanitizedInstructions;
+  }
+
+  return requestBody;
 }
 
 function postToOpenAI(
@@ -72,8 +123,9 @@ function postToOpenAI(
   model: string
 ): Promise<AxiosResponse<OpenAIResponse>> {
   const url = 'https://api.openai.com/v1/responses';
+  const normalized = normalizeOpenAIModel(model);
 
-  requestBody.model = model;
+  requestBody.model = normalized.model;
 
   return axios.post<OpenAIResponse>(url, requestBody, {
     headers: {
@@ -113,14 +165,7 @@ async function prepareAndPostToOpenAI(requestBody: OpenAIRequestBody, apiKey: st
 
 const processPrompt = createGenericProcessPrompt(
   'OpenAI',
-  async (instructions: string) => {
-    const body = await buildRequestBody();
-    const sanitizedInstructions = instructions.trim();
-    if (sanitizedInstructions) {
-      body.instructions = sanitizedInstructions;
-    }
-    return body;
-  },
+  buildRequestBody,
   prepareAndPostToOpenAI,
   createErrorResponse
 );
@@ -129,4 +174,3 @@ const handlePrompt = createPromptHandler(processPrompt, 'OpenAI');
 const app = createApp(handlePrompt, 'OpenAI');
 
 startServer(app, port, db.removeDatabaseFile);
-
