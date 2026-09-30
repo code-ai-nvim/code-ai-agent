@@ -34,11 +34,8 @@ export interface AnthropicRequestBody {
   system?: string;
   messages: ConversationStep[];
   model?: string;
-  thinking?: {
-    type: 'between_tools';
-  };
   output_config?: {
-    effort: 'low' | 'xhigh';
+    effort: AnthropicEffort;
   };
 }
 
@@ -54,21 +51,23 @@ export interface AnthropicResponse {
   };
 }
 
-type AnthropicEffort = 'low' | 'xhigh';
+type AnthropicEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 interface AnthropicModelConfig {
   model: string;
-  thinking?: { type: 'between_tools' };
   effort?: AnthropicEffort;
 }
 
 // Generic suffix-based model normalization.
 // Any model name of the form "<base>-<suffix>" is split on its last `-`
 // separator: the part before is used as the actual model id sent to the API,
-// and the suffix drives the thinking/effort configuration:
-//   - "medium" -> effort "low"
-//   - "high"   -> effort "xhigh"
-//   - anything else (or no suffix at all) -> thinking disabled via between-tool blocks
+// and the suffix drives Anthropic's `output_config.effort`:
+//   - "low"    -> effort "low"
+//   - "medium" -> effort "medium"
+//   - "high"   -> effort "high"
+//   - "xhigh"  -> effort "xhigh"
+//   - "max"    -> effort "max"
+// Models without one of these explicit suffixes are passed through unchanged.
 // Model existence itself is not validated here; that responsibility is
 // delegated to the upstream Anthropic API.
 function normalizeAnthropicModel(model: string): AnthropicModelConfig {
@@ -80,12 +79,14 @@ function normalizeAnthropicModel(model: string): AnthropicModelConfig {
   const [, baseModel, suffix] = match;
 
   switch (suffix) {
+    case 'low':
     case 'medium':
-      return { model: baseModel, effort: 'low' };
     case 'high':
-      return { model: baseModel, effort: 'xhigh' };
+    case 'xhigh':
+    case 'max':
+      return { model: baseModel, effort: suffix };
     default:
-      return { model: baseModel, thinking: { type: 'between_tools' } };
+      return { model };
   }
 }
 
@@ -99,10 +100,6 @@ async function buildRequestBody(instructions: string, model: string): Promise<An
     system: sanitizedInstructions || undefined,
     messages,
   };
-
-  if (normalized.thinking) {
-    requestBody.thinking = normalized.thinking;
-  }
 
   if (normalized.effort) {
     requestBody.output_config = { effort: normalized.effort };
