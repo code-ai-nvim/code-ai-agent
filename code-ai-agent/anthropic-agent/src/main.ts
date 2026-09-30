@@ -34,6 +34,9 @@ export interface AnthropicRequestBody {
   system?: string;
   messages: ConversationStep[];
   model?: string;
+  thinking?: {
+    type: 'disabled' | 'between_tools';
+  };
   output_config?: {
     effort: AnthropicEffort;
   };
@@ -55,21 +58,20 @@ type AnthropicEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 interface AnthropicModelConfig {
   model: string;
+  thinking?: {
+    type: 'disabled' | 'between_tools';
+  };
   effort?: AnthropicEffort;
 }
 
-// Generic suffix-based model normalization.
-// Any model name of the form "<base>-<suffix>" is split on its last `-`
-// separator: the part before is used as the actual model id sent to the API,
-// and the suffix drives Anthropic's `output_config.effort`:
-//   - "low"    -> effort "low"
-//   - "medium" -> effort "medium"
-//   - "high"   -> effort "high"
-//   - "xhigh"  -> effort "xhigh"
-//   - "max"    -> effort "max"
-// Models without one of these explicit suffixes are passed through unchanged.
-// Model existence itself is not validated here; that responsibility is
-// delegated to the upstream Anthropic API.
+// Normalize a model name that may carry a trailing provider-specific suffix.
+// The project treats provider suffixes uniformly: split on the last `-`
+// separator, keep the base model id, and map the suffix to the provider's valid
+// API field when it is recognized. For Anthropic, valid effort values are
+// `low`, `medium`, `high`, `xhigh`, and `max`; the `between_tools` thinking
+// mode is used as the cheapest safe fallback for `none` or any unrecognized
+// suffix. Models without a recognized trailing suffix are passed through
+// unchanged, and model existence is validated by the upstream API.
 function normalizeAnthropicModel(model: string): AnthropicModelConfig {
   const match = model.match(/^(.*)-(.+)$/);
   if (!match) {
@@ -85,8 +87,9 @@ function normalizeAnthropicModel(model: string): AnthropicModelConfig {
     case 'xhigh':
     case 'max':
       return { model: baseModel, effort: suffix };
+    case 'none':
     default:
-      return { model };
+      return { model: baseModel, thinking: { type: 'between_tools' } };
   }
 }
 
@@ -100,6 +103,10 @@ async function buildRequestBody(instructions: string, model: string): Promise<An
     system: sanitizedInstructions || undefined,
     messages,
   };
+
+  if (normalized.thinking) {
+    requestBody.thinking = normalized.thinking;
+  }
 
   if (normalized.effort) {
     requestBody.output_config = { effort: normalized.effort };

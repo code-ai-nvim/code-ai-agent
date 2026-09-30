@@ -57,22 +57,23 @@ export interface OpenAIResponse {
   };
 }
 
-type OpenAIReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+type OpenAIReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export interface OpenAIModelConfig {
   model: string;
   reasoningEffort?: OpenAIReasoningEffort;
 }
 
-// Normalize an OpenAI model name that may carry a trailing reasoning-effort suffix.
-// Examples:
-//   "gpt-6-astra-max" -> { model: "gpt-6-astra", reasoningEffort: "max" }
-//   "gpt-5-high"      -> { model: "gpt-5", reasoningEffort: "high" }
-//   "gpt-5-medium"    -> { model: "gpt-5", reasoningEffort: "medium" }
-//   "gpt-5-low"       -> { model: "gpt-5", reasoningEffort: "low" }
-// Models without one of these explicit suffixes are passed through unchanged.
+// Normalize a model name that may carry a trailing provider-specific suffix.
+// The project treats provider suffixes uniformly: split on the last `-`
+// separator, keep the base model id, and map the suffix to the provider's valid
+// API field when it is recognized. For OpenAI, accepted reasoning values are
+// `low`, `medium`, `high`, `xhigh`, `max`, and `none` (where supported).
+// If the suffix is explicitly `none` or is otherwise unrecognized, we fall back
+// to `reasoning.effort = "none"` so the request stays predictable and cheap.
+// Models without a recognized trailing suffix are passed through unchanged.
 function normalizeOpenAIModel(model: string): OpenAIModelConfig {
-  const match = model.match(/^(.*)-(none|minimal|low|medium|high|xhigh|max)$/);
+  const match = model.match(/^(.*)-(.+)$/);
   if (!match) {
     return { model };
   }
@@ -80,16 +81,15 @@ function normalizeOpenAIModel(model: string): OpenAIModelConfig {
   const [, baseModel, suffix] = match;
 
   switch (suffix) {
-    case 'none':
-    case 'minimal':
     case 'low':
     case 'medium':
     case 'high':
     case 'xhigh':
     case 'max':
       return { model: baseModel, reasoningEffort: suffix };
+    case 'none':
     default:
-      return { model };
+      return { model: baseModel, reasoningEffort: 'none' };
   }
 }
 

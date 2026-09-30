@@ -67,16 +67,15 @@ export interface GoogleAIModelConfig {
   thinkingLevel?: ThinkingLevel;
 }
 
-// Generic suffix-based model normalization for Google AI.
-// Any model name of the form "<base>-<suffix>" is split on its last `-` separator:
-// the part before is used as the actual model id sent to the API, and the suffix
-// drives the thinking configuration:
-//   - "high"   -> thinkingLevel "high"
-//   - "medium" -> thinkingLevel "medium"
-//   - "low"    -> thinkingLevel "low"
-//   - any other suffix -> least thinking available ("low" for Gemini 3.7, "minimal" otherwise)
-// If no suffix separator exists, the model is passed through as-is without thinkingConfig.
-// Model existence itself is not validated here; that responsibility is delegated to the upstream API.
+// Normalize a model name that may carry a trailing provider-specific suffix.
+// The project treats provider suffixes uniformly: split on the last `-`
+// separator, keep the base model id, and map the suffix to the provider's valid
+// API field when it is recognized. For Google AI, valid thinking levels are
+// `minimal`, `low`, `medium`, and `high`. If the suffix is explicitly `none` or
+// is otherwise unrecognized, we fall back to the cheapest valid level
+// (`low` for Gemini 3.7+, otherwise `minimal`) so the request stays predictable
+// and low-cost. Models without a recognized trailing suffix are passed through
+// unchanged, and model existence is validated by the upstream API.
 function normalizeGoogleAIModel(model: string): GoogleAIModelConfig {
   const match = model.match(/^(.*)-(.+)$/);
   if (!match) {
@@ -86,12 +85,12 @@ function normalizeGoogleAIModel(model: string): GoogleAIModelConfig {
   const [, baseModel, suffix] = match;
 
   switch (suffix) {
-    case 'high':
-      return { model: baseModel, thinkingLevel: 'high' };
-    case 'medium':
-      return { model: baseModel, thinkingLevel: 'medium' };
+    case 'minimal':
     case 'low':
-      return { model: baseModel, thinkingLevel: 'low' };
+    case 'medium':
+    case 'high':
+      return { model: baseModel, thinkingLevel: suffix };
+    case 'none':
     default: {
       const isGemini37 = baseModel.includes('3.7');
       const thinkingLevel: ThinkingLevel = isGemini37 ? 'low' : 'minimal';
