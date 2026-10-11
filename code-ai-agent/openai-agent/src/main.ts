@@ -72,7 +72,7 @@ export interface OpenAIModelConfig {
 // Models without a `:` separator or with an unrecognized suffix are passed
 // through unchanged, and model existence is validated by the upstream API.
 function normalizeOpenAIModel(model: string): OpenAIModelConfig {
-  const match = model.match(/^(.*):(.+)$/);
+  const match = model.match(/^(.+):(.+)$/);
   if (!match) {
     return { model };
   }

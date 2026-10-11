@@ -76,7 +76,7 @@ export interface GoogleAIModelConfig {
 // Models without a `:` separator or with an unrecognized suffix are passed
 // through unchanged, and model existence is validated by the upstream API.
 function normalizeGoogleAIModel(model: string): GoogleAIModelConfig {
-  const match = model.match(/^(.*):(.+)$/);
+  const match = model.match(/^(.+):(.+)$/);
   if (!match) {
     return { model };
   }
