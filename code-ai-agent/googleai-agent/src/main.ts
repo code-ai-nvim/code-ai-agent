@@ -67,17 +67,16 @@ export interface GoogleAIModelConfig {
   thinkingLevel?: ThinkingLevel;
 }
 
-// Normalize a model name that may carry a trailing provider-specific suffix.
-// The project treats provider suffixes uniformly: split on the last `-`
-// separator, keep the base model id, and map the suffix to the provider's valid
-// API field when it is recognized. For Google AI, valid thinking levels are
-// `minimal`, `low`, `medium`, and `high`. If the suffix is explicitly `none` or
-// is otherwise unrecognized, we fall back to the cheapest valid level
-// (`low` for Gemini 3.7+, otherwise `minimal`) so the request stays predictable
-// and low-cost. Models without a recognized trailing suffix are passed through
-// unchanged, and model existence is validated by the upstream API.
+// Normalize a model name that may carry a provider-specific effort level suffix.
+// The project treats effort levels uniformly: split on the `:` separator,
+// keep the base model id, and map the suffix to the provider's valid API field
+// when it is recognized. For Google AI, valid thinking levels are `minimal`,
+// `low`, `medium`, and `high`. `none` maps to the cheapest valid level
+// (`low` for Gemini 3.7+, otherwise `minimal`).
+// Models without a `:` separator or with an unrecognized suffix are passed
+// through unchanged, and model existence is validated by the upstream API.
 function normalizeGoogleAIModel(model: string): GoogleAIModelConfig {
-  const match = model.match(/^(.*)-(.+)$/);
+  const match = model.match(/^(.*):(.+)$/);
   if (!match) {
     return { model };
   }
@@ -90,12 +89,13 @@ function normalizeGoogleAIModel(model: string): GoogleAIModelConfig {
     case 'medium':
     case 'high':
       return { model: baseModel, thinkingLevel: suffix };
-    case 'none':
-    default: {
+    case 'none': {
       const isGemini37 = baseModel.includes('3.7');
       const thinkingLevel: ThinkingLevel = isGemini37 ? 'low' : 'minimal';
       return { model: baseModel, thinkingLevel };
     }
+    default:
+      return { model };
   }
 }
 

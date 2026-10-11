@@ -64,16 +64,15 @@ export interface OpenAIModelConfig {
   reasoningEffort?: OpenAIReasoningEffort;
 }
 
-// Normalize a model name that may carry a trailing provider-specific suffix.
-// The project treats provider suffixes uniformly: split on the last `-`
-// separator, keep the base model id, and map the suffix to the provider's valid
-// API field when it is recognized. For OpenAI, accepted reasoning values are
-// `low`, `medium`, `high`, `xhigh`, `max`, and `none` (where supported).
-// If the suffix is explicitly `none` or is otherwise unrecognized, we fall back
-// to `reasoning.effort = "none"` so the request stays predictable and cheap.
-// Models without a recognized trailing suffix are passed through unchanged.
+// Normalize a model name that may carry a provider-specific effort level suffix.
+// The project treats effort levels uniformly: split on the `:` separator,
+// keep the base model id, and map the suffix to the provider's valid API field
+// when it is recognized. For OpenAI, accepted reasoning values are `low`,
+// `medium`, `high`, `xhigh`, `max`, and `none` (where supported).
+// Models without a `:` separator or with an unrecognized suffix are passed
+// through unchanged, and model existence is validated by the upstream API.
 function normalizeOpenAIModel(model: string): OpenAIModelConfig {
-  const match = model.match(/^(.*)-(.+)$/);
+  const match = model.match(/^(.*):(.+)$/);
   if (!match) {
     return { model };
   }
@@ -86,10 +85,10 @@ function normalizeOpenAIModel(model: string): OpenAIModelConfig {
     case 'high':
     case 'xhigh':
     case 'max':
-      return { model: baseModel, reasoningEffort: suffix };
     case 'none':
+      return { model: baseModel, reasoningEffort: suffix };
     default:
-      return { model: baseModel, reasoningEffort: 'none' };
+      return { model };
   }
 }
 

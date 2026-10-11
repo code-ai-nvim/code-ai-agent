@@ -64,16 +64,15 @@ interface AnthropicModelConfig {
   effort?: AnthropicEffort;
 }
 
-// Normalize a model name that may carry a trailing provider-specific suffix.
-// The project treats provider suffixes uniformly: split on the last `-`
-// separator, keep the base model id, and map the suffix to the provider's valid
-// API field when it is recognized. For Anthropic, valid effort values are
-// `low`, `medium`, `high`, `xhigh`, and `max`; the `between_tools` thinking
-// mode is used as the cheapest safe fallback for `none` or any unrecognized
-// suffix. Models without a recognized trailing suffix are passed through
-// unchanged, and model existence is validated by the upstream API.
+// Normalize a model name that may carry a provider-specific effort level suffix.
+// The project treats effort levels uniformly: split on the `:` separator,
+// keep the base model id, and map the suffix to the provider's valid API field
+// when it is recognized. For Anthropic, valid effort values are `low`, `medium`,
+// `high`, `xhigh`, and `max`; `none` maps to the `between_tools` thinking mode.
+// Models without a `:` separator or with an unrecognized suffix are passed
+// through unchanged, and model existence is validated by the upstream API.
 function normalizeAnthropicModel(model: string): AnthropicModelConfig {
-  const match = model.match(/^(.*)-(.+)$/);
+  const match = model.match(/^(.*):(.+)$/);
   if (!match) {
     return { model };
   }
@@ -88,8 +87,9 @@ function normalizeAnthropicModel(model: string): AnthropicModelConfig {
     case 'max':
       return { model: baseModel, effort: suffix };
     case 'none':
-    default:
       return { model: baseModel, thinking: { type: 'between_tools' } };
+    default:
+      return { model };
   }
 }
 
